@@ -569,15 +569,27 @@ class EvmApiProvider extends BaseApiProvider {
   override async getGasLimit(
     params: IServerGasLimitParams,
   ): Promise<IServerGasLimitResponse> {
-    const estimateGasLimitRes = await this.client.call<string>(
-      'eth_estimateGas',
-      [pick(params.encodedTx, 'from', 'to', 'value', 'data')],
-    );
+    const { to } = params.encodedTx as IEncodedTxEvm;
+    const payloads: IJsonRpcBatchParams = [
+      [
+        'eth_estimateGas',
+        [pick(params.encodedTx, 'from', 'to', 'value', 'data')],
+      ],
+    ];
+
+    if (to) {
+      payloads.push(['eth_getCode', [to, 'latest']]);
+    }
+
+    const [estimateGasLimitRes, contractCode] = await this.client.batchCall<
+      [string, string | undefined]
+    >(payloads);
 
     const estimateGasLimit = Number(estimateGasLimitRes);
+    const isContract = contractCode && contractCode !== '0x';
 
     const gasLimit =
-      (params.encodedTx as IEncodedTxEvm)?.data === EMPTY_DATA
+      (params.encodedTx as IEncodedTxEvm)?.data === EMPTY_DATA && !isContract
         ? estimateGasLimit
         : estimateGasLimit * GAS_LIMIT_RATE;
 
