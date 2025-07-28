@@ -194,6 +194,7 @@ async function buildCustomScreenHex(
     return {
       screenHex: customHex,
       thumbnailHex: undefined,
+      blurScreenHex: undefined,
     };
   }
 
@@ -201,6 +202,7 @@ async function buildCustomScreenHex(
     return {
       screenHex: '',
       thumbnailHex: undefined,
+      blurScreenHex: undefined,
     };
   }
 
@@ -219,6 +221,7 @@ async function buildCustomScreenHex(
   }
 
   let screenHex = '';
+  let screenBase64 = '';
   if (!isUserUpload) {
     const imgScreen = await imageUtils.resizeImage({
       uri: imgUri,
@@ -231,16 +234,24 @@ async function buildCustomScreenHex(
       isMonochrome: false,
     });
     screenHex = imgScreen.hex;
+    screenBase64 = imageUtils.prefixBase64Uri(imgUri, 'image/jpeg');
   } else {
     screenHex = Buffer.from(
       imageUtils.stripBase64UriPrefix(imgUri),
       'base64',
     ).toString('hex');
+    screenBase64 = imageUtils.prefixBase64Uri(imgUri, 'image/jpeg');
   }
 
+  const blurScreen = await imageUtils.processImageBlur({
+    base64Data: screenBase64 || '',
+  });
+
   return {
-    screenHex,
+    // screenHex,
+    screenHex: blurScreen.hex,
     thumbnailHex: imgThumb?.hex,
+    blurScreenHex: blurScreen.hex,
   };
 }
 

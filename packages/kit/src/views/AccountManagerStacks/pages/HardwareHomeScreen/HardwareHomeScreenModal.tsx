@@ -784,8 +784,14 @@ export default function HardwareHomeScreenModal({
             }
             setIsUploadLoading(true);
 
-            const { nameHex, screenHex, thumbnailHex, resType, isUserUpload } =
-              selectedItem;
+            const {
+              nameHex,
+              screenHex,
+              thumbnailHex,
+              blurScreenHex,
+              resType,
+              isUserUpload,
+            } = selectedItem;
 
             const isCustomScreen = resType === 'custom' || isUserUpload;
 
@@ -793,6 +799,7 @@ export default function HardwareHomeScreenModal({
 
             let finallyScreenHex = '';
             let finallyThumbnailHex: string | undefined;
+            let finallyBlurScreenHex: string | undefined;
             try {
               if (isCustomScreen) {
                 // case 1: custom upload wallpaper from uri
@@ -800,6 +807,7 @@ export default function HardwareHomeScreenModal({
                 const {
                   screenHex: customScreenHex,
                   thumbnailHex: customThumbnailHex,
+                  blurScreenHex: customBlurScreenHex,
                 } = await deviceHomeScreenUtils.buildCustomScreenHex(
                   device.id,
                   selectedItem.uri || selectedItem.url,
@@ -810,9 +818,11 @@ export default function HardwareHomeScreenModal({
 
                 finallyScreenHex = customScreenHex || '';
                 finallyThumbnailHex = customThumbnailHex;
+                finallyBlurScreenHex = customBlurScreenHex;
               } else {
                 finallyScreenHex = screenHex || nameHex || '';
                 finallyThumbnailHex = thumbnailHex;
+                finallyBlurScreenHex = blurScreenHex;
               }
             } catch (error) {
               buildCustomHexError = (error as Error | undefined)?.message;
@@ -826,6 +836,8 @@ export default function HardwareHomeScreenModal({
               imgName: selectedItem.id,
               imgResType: resType,
               imgHex: finallyScreenHex,
+              thumbnailHex: finallyThumbnailHex || '',
+              blurScreenHex: finallyBlurScreenHex || '',
               isUserUpload,
             });
 
@@ -835,6 +847,7 @@ export default function HardwareHomeScreenModal({
                 ...selectedItem,
                 screenHex: finallyScreenHex,
                 thumbnailHex: finallyThumbnailHex,
+                blurScreenHex: finallyBlurScreenHex,
               },
             });
             // setSelectedItem(undefined);

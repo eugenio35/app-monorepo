@@ -51,6 +51,7 @@ export type IHardwareHomeScreenData = {
 
   // software generated image
   thumbnailHex?: string; // Pro、Touch：thumb image hex by resize
+  blurScreenHex?: string; // Pro、Touch：blur image hex by blur effect
 
   // User upload config
   uri?: string; // image base64 by upload & crop
@@ -218,6 +219,7 @@ export class DeviceSettingsManager extends ServiceHardwareManagerBase {
             suffix: 'jpeg',
             dataHex: finallyScreenHex,
             thumbnailDataHex: finallyThumbnailHex,
+            // blurDataHex: finallyBlurScreenHex,
             nftMetaData: '',
           };
           // upload wallpaper resource will automatically set the home screen
