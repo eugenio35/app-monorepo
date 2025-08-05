@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 import type { IButtonProps } from '@onekeyhq/components';
 import { IconButton, SizableText, Stack, XStack } from '@onekeyhq/components';
@@ -84,6 +84,43 @@ export function AccountSelectorAccountListItem({
     | undefined;
   mergeDeriveAssetsEnabled: boolean | undefined;
 }) {
+  // Render counter with 5-second reset
+  const renderCountersRef = useRef<
+    Map<string, { count: number; timer: ReturnType<typeof setTimeout> }>
+  >(new Map());
+
+  const getRenderCount = (id: string): number => {
+    const counters = renderCountersRef.current;
+    const existing = counters.get(id);
+
+    if (existing) {
+      // Clear existing timer
+      clearTimeout(existing.timer);
+      // Increment count
+      existing.count += 1;
+    } else {
+      // Create new counter
+      counters.set(id, { count: 1, timer: setTimeout(() => {}, 0) });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const current = counters.get(id)!;
+
+    // Set new timer to reset after 5 seconds
+    current.timer = setTimeout(() => {
+      counters.delete(id);
+    }, 5000);
+
+    return current.count;
+  };
+
+  const renderCount = getRenderCount(item.id);
+
+  console.log('AccountSelectorAccountListItem__render', {
+    id: item.id,
+    name: item.name,
+    renderCount,
+  });
   const actions = useAccountSelectorActions();
   const navigation = useAppNavigation();
   const {

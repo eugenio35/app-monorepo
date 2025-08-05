@@ -166,44 +166,57 @@ export abstract class KeyringHardwareBase extends KeyringBase {
       return undefined;
     }
     const { hwAllNetworkPrepareAccountsResponse } = params;
-    if (hwAllNetworkPrepareAccountsResponse?.length) {
-      const resultAccounts: T[] = [];
-      for (const index of usedIndexes) {
-        const path: string = await buildPath({
-          index,
-        });
-        const account = hwAllNetworkPrepareAccountsResponse?.find(
-          (item) =>
-            item.network && item.path === path && item.network === hwSdkNetwork,
-        );
-        if (account && account.success) {
-          resultAccounts.push(buildResultAccount({ account, index }));
+    if (hwAllNetworkPrepareAccountsResponse) {
+      try {
+        const resultAccounts: T[] = [];
+        for (const index of usedIndexes) {
+          const path: string = await buildPath({
+            index,
+          });
+          // const account = hwAllNetworkPrepareAccountsResponse?.find(
+          //   (item) =>
+          //     item.network && item.path === path && item.network === hwSdkNetwork,
+          // );
+          const account = await hwAllNetworkPrepareAccountsResponse.getItem({
+            path,
+            hwSdkNetwork,
+          });
+          if (account && account.success && account.payload) {
+            resultAccounts.push(buildResultAccount({ account, index }));
+          }
         }
-      }
-      if (resultAccounts.length === usedIndexes.length) {
-        return {
-          success: true,
-          payload: resultAccounts,
-        };
-      }
+        if (resultAccounts.length === usedIndexes.length) {
+          return {
+            success: true,
+            payload: resultAccounts,
+          };
+        }
 
-      // if result length not match to indexes, throw first error item
-      const hasErrorItem = hwAllNetworkPrepareAccountsResponse?.find(
-        (item) => !item.success && !!item.payload?.error,
-      );
-      if (!hasErrorItem?.success && hasErrorItem?.payload?.error) {
+        // if result length not match to indexes, throw first error item
+        const hasErrorItem =
+          await hwAllNetworkPrepareAccountsResponse.getFirstErrorItem();
         if (
-          // response.payload.code === HardwareErrorCode.RuntimeError &&
-          hasErrorItem?.payload?.error?.indexOf(
-            'Failure_DataError,Forbidden key path',
-          ) !== -1
+          hasErrorItem &&
+          !hasErrorItem?.success &&
+          hasErrorItem?.payload?.error
         ) {
-          throw new UnsupportedAddressTypeError();
+          if (
+            // response.payload.code === HardwareErrorCode.RuntimeError &&
+            hasErrorItem?.payload?.error?.indexOf(
+              'Failure_DataError,Forbidden key path',
+            ) !== -1
+          ) {
+            throw new UnsupportedAddressTypeError();
+          }
+          throw convertDeviceError(hasErrorItem.payload);
+          // throw new OneKeyInternalError(hasErrorItem.payload.error);
         }
-        throw convertDeviceError(hasErrorItem.payload);
-        // throw new OneKeyInternalError(hasErrorItem.payload.error);
+        throw new OneKeyInternalError('SDK GetAllNetworkAccounts Failed');
+      } finally {
+        // do not destroy hwAllNetworkPrepareAccountsResponse here,
+        // it will be destroyed in onFinally callback of ServiceBatchCreateAccount
+        // hwAllNetworkPrepareAccountsResponse?.destroy();
       }
-      throw new OneKeyInternalError('SDK GetAllNetworkAccounts Failed');
     }
   }
 }

@@ -150,7 +150,7 @@ export async function promiseAllSettledEnhanced<T>(
   );
 }
 
-class PromiseTarget<T> {
+export class PromiseTarget<T> {
   ready = new Promise<T>((resolve) => {
     this._resolveFn = resolve;
   });

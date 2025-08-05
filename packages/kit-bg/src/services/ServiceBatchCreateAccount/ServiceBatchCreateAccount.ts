@@ -35,9 +35,11 @@ import { vaultFactory } from '../../vaults/factory';
 import { getVaultSettings } from '../../vaults/settings';
 import { buildDefaultAddAccountNetworks } from '../ServiceAccount/defaultNetworkAccountsConfig';
 import ServiceBase from '../ServiceBase';
+import { HardwareAllNetworkGetAddressResponse } from '../ServiceHardware/HardwareAllNetworkGetAddressResponse';
 
 import type {
   IAccountDeriveTypes,
+  IHwAllNetworkPrepareAccountsItem,
   IHwAllNetworkPrepareAccountsResponse,
 } from '../../vaults/types';
 import type { IWithHardwareProcessingControlParams } from '../ServiceHardwareUI/ServiceHardwareUI';
@@ -195,6 +197,9 @@ class ServiceBatchCreateAccount extends ServiceBase {
       }),
     ]);
 
+    let hwAllNetworkPrepareAccountsResponse:
+      | IHwAllNetworkPrepareAccountsResponse
+      | undefined;
     return this.backgroundApi.serviceHardwareUI.withHardwareProcessing(
       async () => {
         let customNetworks: {
@@ -227,7 +232,7 @@ class ServiceBatchCreateAccount extends ServiceBase {
             walletId: payload.params.walletId,
             customNetworks,
           });
-        const hwAllNetworkPrepareAccountsResponse =
+        hwAllNetworkPrepareAccountsResponse =
           await this.getHwAllNetworkPrepareAccountsResponse({
             walletId: payload.params.walletId,
             hideCheckingDeviceLoading: payload.params.hideCheckingDeviceLoading,
@@ -235,8 +240,8 @@ class ServiceBatchCreateAccount extends ServiceBase {
             indexes,
             networksParams,
             saveToCache: payload.saveToCache,
+            loopMode: true,
           });
-
         this.progressInfo = this.buildProgressInfo({
           indexes,
           excludedIndexes,
@@ -291,6 +296,9 @@ class ServiceBatchCreateAccount extends ServiceBase {
       {
         deviceParams,
         hideCheckingDeviceLoading: payload.params.hideCheckingDeviceLoading,
+        onFinally: () => {
+          hwAllNetworkPrepareAccountsResponse?.destroy();
+        },
       },
     );
   }
@@ -365,6 +373,9 @@ class ServiceBatchCreateAccount extends ServiceBase {
         {
           deviceParams,
           skipDeviceCancel: true,
+          onFinally: () => {
+            hwAllNetworkPrepareAccountsResponse?.destroy();
+          },
         },
       );
 
@@ -585,10 +596,10 @@ class ServiceBatchCreateAccount extends ServiceBase {
     networksParams: IBatchBuildAccountsBaseParams[];
     showOnOneKey?: boolean;
     saveToCache?: boolean;
-  }) {
-    let hwAllNetworkPrepareAccountsResponse:
-      | IHwAllNetworkPrepareAccountsResponse
-      | undefined;
+    loopMode?: boolean;
+  }): Promise<IHwAllNetworkPrepareAccountsResponse | undefined> {
+    const hwAllNetworkPrepareAccountsResponse =
+      new HardwareAllNetworkGetAddressResponse();
 
     // call hw all network api for faster
     if (accountUtils.isHwWallet({ walletId: params.walletId })) {
@@ -652,24 +663,69 @@ class ServiceBatchCreateAccount extends ServiceBase {
           if (bundleParams.length && deviceParams?.dbDevice) {
             const sdk =
               await this.backgroundApi.serviceHardware.getSDKInstance();
-            hwAllNetworkPrepareAccountsResponse = (await convertDeviceResponse(
-              async () => {
-                // throw new NewFirmwareForceUpdate({ payload: {} });
+            // hwAllNetworkPrepareAccountsResponse
 
-                appEventBus.emit(
-                  EAppEventBusNames.SDKGetAllNetworkAddressesStart,
-                  undefined,
-                );
-                try {
+            hwAllNetworkPrepareAccountsResponse.bundleLength =
+              bundleParams.length;
+
+            console.log(
+              'getHwAllNetworkPrepareAccountsResponse__bundleParams>>>>>>>',
+              {
+                length: bundleParams.length,
+                loopMode: params.loopMode,
+              },
+            );
+
+            // throw new NewFirmwareForceUpdate({ payload: {} });
+
+            appEventBus.emit(
+              EAppEventBusNames.SDKGetAllNetworkAddressesStart,
+              undefined,
+            );
+            let allNetworkGetAddressResponse: IHwAllNetworkPrepareAccountsItem[] =
+              [];
+            try {
+              allNetworkGetAddressResponse = (await convertDeviceResponse(
+                async () => {
+                  const sdkPromiseResult = params.loopMode
+                    ? sdk.allNetworkGetAddressByLoop(
+                        deviceParams.dbDevice?.connectId || '',
+                        deviceParams.dbDevice?.deviceId || '',
+                        {
+                          ...deviceParams.deviceCommonParams,
+                          bundle: bundleParams,
+                          // loopMode: params.loopMode,
+                          onLoopItemResponse: (data) => {
+                            console.log('onLoopItemResponse', data);
+
+                            // TODO handle device locked or reboot error
+                            // TODO handle network not support error
+                            if (data) {
+                              hwAllNetworkPrepareAccountsResponse.onSdkItemCallResponse(
+                                data as IHwAllNetworkPrepareAccountsItem,
+                              );
+                            }
+                          },
+                          onAllItemsResponse: (data) => {
+                            console.log('onAllItemsResponse', data);
+                            appEventBus.emit(
+                              EAppEventBusNames.SDKGetAllNetworkAddressesEnd,
+                              undefined,
+                            );
+                          },
+                        },
+                      )
+                    : sdk.allNetworkGetAddress(
+                        deviceParams.dbDevice?.connectId || '',
+                        deviceParams.dbDevice?.deviceId || '',
+                        {
+                          ...deviceParams.deviceCommonParams,
+                          bundle: bundleParams,
+                        },
+                      );
+
                   const sdkAllNetworkGetAddressResponse =
-                    await sdk.allNetworkGetAddress(
-                      deviceParams.dbDevice?.connectId || '',
-                      deviceParams.dbDevice?.deviceId || '',
-                      {
-                        ...deviceParams.deviceCommonParams,
-                        bundle: bundleParams,
-                      },
-                    );
+                    await sdkPromiseResult;
 
                   console.log('sdk.allNetworkGetAddress response', {
                     bundle: bundleParams,
@@ -677,14 +733,43 @@ class ServiceBatchCreateAccount extends ServiceBase {
                   });
 
                   return sdkAllNetworkGetAddressResponse;
-                } finally {
-                  appEventBus.emit(
-                    EAppEventBusNames.SDKGetAllNetworkAddressesEnd,
-                    undefined,
+                },
+              )) as IHwAllNetworkPrepareAccountsItem[];
+            } catch (error) {
+              console.log('sdk.allNetworkGetAddress error', error);
+              appEventBus.emit(
+                EAppEventBusNames.SDKGetAllNetworkAddressesEnd,
+                undefined,
+              );
+              throw error;
+            } finally {
+              if (!params.loopMode) {
+                appEventBus.emit(
+                  EAppEventBusNames.SDKGetAllNetworkAddressesEnd,
+                  undefined,
+                );
+              }
+            }
+
+            setTimeout(() => {
+              const resolveSdkGetAllAddressResponse = () => {
+                for (const item of allNetworkGetAddressResponse) {
+                  hwAllNetworkPrepareAccountsResponse.onSdkItemCallResponse(
+                    item,
                   );
                 }
-              },
-            )) as any; // TODO sdk type error
+              };
+
+              resolveSdkGetAllAddressResponse();
+
+              if (process.env.NODE_ENV !== 'production') {
+                // resolve by console call manually:
+                //      window.$$resolveSdkGetAllAddressResponse()
+                // @ts-ignore
+                globalThis.$$resolveSdkGetAllAddressResponse =
+                  resolveSdkGetAllAddressResponse;
+              }
+            }, 0);
           }
         },
         {
@@ -725,6 +810,10 @@ class ServiceBatchCreateAccount extends ServiceBase {
         hardwareCallContext: EHardwareCallContext.USER_INTERACTION,
       });
 
+    let hwAllNetworkPrepareAccountsResponse:
+      | IHwAllNetworkPrepareAccountsResponse
+      | undefined;
+
     return this.backgroundApi.serviceHardwareUI.withHardwareProcessing(
       async () => {
         const networksParams: IBatchBuildAccountsBaseParams[] =
@@ -760,7 +849,7 @@ class ServiceBatchCreateAccount extends ServiceBase {
           error: IOneKeyError;
         }> = [];
 
-        const hwAllNetworkPrepareAccountsResponse =
+        hwAllNetworkPrepareAccountsResponse =
           await this.getHwAllNetworkPrepareAccountsResponse({
             walletId: params.walletId,
             hideCheckingDeviceLoading: params.hideCheckingDeviceLoading,
@@ -822,6 +911,9 @@ class ServiceBatchCreateAccount extends ServiceBase {
         deviceParams,
         skipDeviceCancel: params.skipDeviceCancel,
         hideCheckingDeviceLoading: params.hideCheckingDeviceLoading,
+        onFinally: () => {
+          hwAllNetworkPrepareAccountsResponse?.destroy();
+        },
       },
     );
   }
@@ -1125,7 +1217,8 @@ class ServiceBatchCreateAccount extends ServiceBase {
 
     if (indexesForRebuild.length) {
       // Hardware supports creating up to 10 addresses at a time, so we need to create them in batches here
-      const indexesChunks = chunk(indexesForRebuild, 10);
+      // const indexesChunks = chunk(indexesForRebuild, 10);
+      const indexesChunks = chunk(indexesForRebuild, 1);
       for (let i = 0; i < indexesChunks.length; i += 1) {
         const indexesForRebuildChunk = indexesChunks[i];
         try {
@@ -1148,9 +1241,9 @@ class ServiceBatchCreateAccount extends ServiceBase {
               hwAllNetworkPrepareAccountsResponse,
             });
 
-          if (i !== indexesChunks.length - 1) {
-            await timerUtils.wait(300);
-          }
+          // if (i !== indexesChunks.length - 1) {
+          //   await timerUtils.wait(300);
+          // }
 
           defaultLogger.account.batchCreatePerf.prepareHdOrHwAccountsDone();
 
