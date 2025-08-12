@@ -1,0 +1,4 @@
+!function(){try{var e="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&(e._sentryDebugIds=e._sentryDebugIds||{},e._sentryDebugIds[n]="04e30b3c-7652-4bff-aac4-e16a287c9e22",e._sentryDebugIdIdentifier="sentry-dbid-04e30b3c-7652-4bff-aac4-e16a287c9e22")}catch(e){}}();var _global="undefined"!=typeof window?window:"undefined"!=typeof global?global:"undefined"!=typeof self?self:{};_global.SENTRY_RELEASE={id:"5.12.0 (2025081259)"},(self.webpackChunkweb=self.webpackChunkweb||[]).push([[21716],{821716:(e,n,d)=>{d.r(n),d.d(n,{cursorSvg:()=>f});const f=d(194062).JW` <svg fill="none" viewBox="0 0 13 4">
+  <path fill="currentColor" d="M.5 0h12L8.9 3.13a3.76 3.76 0 0 1-4.8 0L.5 0Z" />
+</svg>`}}]);
+//# sourceMappingURL=21716.e18f7669f2.chunk.js.map
